@@ -1,7 +1,7 @@
 import mysql.connector
 global cnx
 cnx=mysql.connector.connect(
-    host="postgresql://pandeyji_eatery_user:CTlaLDYlkAH1fq0vLrrbM5HPkIRg341i@dpg-ctl59hq3esus73ed9610-a.oregon-postgres.render.com/pandeyji_eatery",
+    host="localhost",
     user="root",
     password="sneakers_m@824",
     database="pandeyji_eatery"
