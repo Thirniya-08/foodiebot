@@ -1,12 +1,13 @@
 import mysql.connector
 global cnx
+import os
 cnx=mysql.connector.connect(
-    host="postgresql://pandeyji_eatery_user:CTlaLDYlkAH1fq0vLrrbM5HPkIRg341i@dpg-ctl59hq3esus73ed9610-a.oregon-postgres.render.com/pandeyji_eatery",
-    user="root",
-    password="sneakers_m@824",
-    database="pandeyji_eatery"
+    host=os.getenv("DB_HOST"),
+    user=os.getenv("DB_USER"),
+    password=os.getenv("DB_PASSWORD"),
+    database=os.getenv("DB_NAME")
 )
-
+port = int(os.getenv("PORT", 8000))
 def insert_order_item(food_item, quantity, order_id):
     try:
         cursor = cnx.cursor()
