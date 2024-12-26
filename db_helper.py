@@ -1,112 +1,83 @@
 import mysql.connector
-global cnx
 import os
-cnx=mysql.connector.connect(
-    host=os.getenv("DB_HOST"),
-    user=os.getenv("DB_USER"),
-    password=os.getenv("DB_PASSWORD"),
-    database=os.getenv("DB_NAME")
-)
-port = int(os.getenv("PORT", 8000))
-def insert_order_item(food_item, quantity, order_id):
+from dotenv import load_dotenv
+
+# Load environment variables from the .env file
+load_dotenv()
+
+# Fetch the values from the .env file
+DB_HOST = os.getenv("DB_HOST")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_NAME = os.getenv("DB_NAME")
+PORT = int(os.getenv("PORT"))
+
+# Function to establish a connection to the database
+def get_db_connection():
+    connection = mysql.connector.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME,
+        port=PORT
+    )
+    return connection
+
+async def get_next_order_id():
+    connection = get_db_connection()
+    cursor = connection.cursor()
+    cursor.execute("SELECT MAX(order_id) FROM orders")
+    max_order_id = cursor.fetchone()[0]
+    connection.close()
+    return max_order_id + 1 if max_order_id else 1
+
+async def insert_order_item(food_item: str, quantity: int, order_id: int):
     try:
-        cursor = cnx.cursor()
-
-        # Calling the stored procedure
-        cursor.callproc('insert_order_item', (food_item, quantity, order_id))
-
-        # Committing the changes
-        cnx.commit()
-
-        # Closing the cursor
-        cursor.close()
-
-        print("Order item inserted successfully!")
-
-        return 1
-
-    except mysql.connector.Error as err:
-        print(f"Error inserting order item: {err}")
-
-        # Rollback changes if necessary
-        cnx.rollback()
-
-        return -1
-
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        cursor.execute(
+            "INSERT INTO orders (item_id, quantity, total_price, order_id) "
+            "SELECT item_id, %s, (f.price * %s), %s FROM food_items f WHERE f.name = %s",
+            (quantity, quantity, order_id, food_item)
+        )
+        connection.commit()
+        connection.close()
+        return 0  # success
     except Exception as e:
-        print(f"An error occurred: {e}")
-        # Rollback changes if necessary
-        cnx.rollback()
-
-        return -1
+        print(f"Error inserting order item: {e}")
+        return -1  # error
 
 
-def insert_order_tracking(order_id, status):
-    cursor = cnx.cursor()
+async def insert_order_tracking(order_id: int, status: str):
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        cursor.execute(
+            "INSERT INTO order_tracking (order_id, status) VALUES (%s, %s)",
+            (order_id, status)
+        )
+        connection.commit()
+        connection.close()
+    except Exception as e:
+        print(f"Error inserting order tracking: {e}")
 
-    # Inserting the record into the order_tracking table
-    insert_query = "INSERT INTO order_tracking (order_id, status) VALUES (%s, %s)"
-    cursor.execute(insert_query, (order_id, status))
-
-    # Committing the changes
-    cnx.commit()
-
-    # Closing the cursor
-    cursor.close()
-
-
-
-def get_total_order_price(order_id):
-    cursor = cnx.cursor()
-
-    # Executing the SQL query to get the total order price
-    query = f"SELECT get_total_order_price({order_id})"
-    cursor.execute(query)
-
-    # Fetching the result
-    result = cursor.fetchone()[0]
-
-    # Closing the cursor
-    cursor.close()
-
-    return result
+async def get_order_status(order_id: int):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+    cursor.execute("SELECT status FROM order_tracking WHERE order_id = %s", (order_id,))
+    result = cursor.fetchone()
+    connection.close()
+    return result[0] if result else None
 
 
-
-def get_next_order_id():
-    cursor=cnx.cursor()
-
-    query="SELECT MAX(order_id) FROM orders"
-    cursor.execute(query)
-    result=cursor.fetchone()[0]
-    cursor.close()
-
-    if result is None:
-        return 1
-    else:
-        return result+1
-
-
-
-def get_order_status(order_id:int):
-    cursor=cnx.cursor()
-    query=("SELECT status FROM order_tracking WHERE order_id= %s")
-    cursor.execute(query, (order_id,))
-    result=cursor.fetchone()
-    cursor.close()
-
-
-    if result is not None:
-        return result[0]
-    else:
-        return None
-
-
-if __name__ == "__main__":
-    # print(get_total_order_price(56))
-    # insert_order_item('Samosa', 3, 99)
-    # insert_order_item('Pav Bhaji', 1, 99)
-    # insert_order_tracking(99, "in progress")
-    print(get_next_order_id())
-
-
+async def get_total_order_price(order_id: int):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        "SELECT SUM(o.quantity * f.price) FROM orders o "
+        "JOIN food_items f ON o.item_id = f.item_id "
+        "WHERE o.order_id = %s", (order_id,)
+    )
+    result = cursor.fetchone()
+    connection.close()
+    return result[0] if result else 0
