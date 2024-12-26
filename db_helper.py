@@ -2,7 +2,7 @@ import mysql.connector
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from the .env file
+
 load_dotenv()
 
 # Fetch the values from the .env file
@@ -12,7 +12,7 @@ DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_NAME = os.getenv("DB_NAME")
 PORT = int(os.getenv("PORT"))
 
-# Function to establish a connection to the database
+
 def get_db_connection():
     connection = mysql.connector.connect(
         host=DB_HOST,
