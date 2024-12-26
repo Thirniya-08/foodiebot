@@ -10,17 +10,17 @@ inprogress_orders= {}
 
 @app.post("/")
 async def handle_request(request: Request):
-    # Retrieve the JSON data from the request
+    
     payload = await request.json()
-    # Extract the necessary information from the payload
+   
     intent = payload['queryResult']['intent']['displayName']
     parameters = payload['queryResult']['parameters']
     output_contexts = payload['queryResult']['outputContexts']
     session_id = generic_helper.extract_session_id(output_contexts[0]['name'])
 
-    context_name = output_contexts[0]['name']  # Example: "projects/{project-id}/agent/sessions/{session-id}/contexts/ongoing-order"
-    project_id = context_name.split('/')[1]  # Extracting the project-id from the context name
-    session_id = context_name.split('/')[3]  # Extracting the session-id from the context name
+    context_name = output_contexts[0]['name'] 
+    project_id = context_name.split('/')[1] 
+    session_id = context_name.split('/')[3]  
 
     # Print the project-id and session-id to the terminal
     print(f"Project ID: {project_id}")
@@ -46,7 +46,7 @@ async def save_to_db(order: dict):
 
     # Insert individual items along with quantity in the orders table
     for food_item, quantity in order.items():
-        rcode = await db_helper.insert_order_item(food_item, quantity, next_order_id)  # Make sure this inserts into the 'orders' table
+        rcode = await db_helper.insert_order_item(food_item, quantity, next_order_id)  
         if rcode == -1:
             return -1
 
