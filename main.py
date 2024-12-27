@@ -4,23 +4,29 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 import db_helper
 import generic_helper
+
 app = FastAPI()
 
-inprogress_orders= {}
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to the FastAPI app!"}
+
+# In-memory dictionary to track orders
+inprogress_orders = {}
 
 @app.post("/")
 async def handle_request(request: Request):
-    
+    # Retrieve the JSON data from the request
     payload = await request.json()
-   
+    # Extract the necessary information from the payload
     intent = payload['queryResult']['intent']['displayName']
     parameters = payload['queryResult']['parameters']
     output_contexts = payload['queryResult']['outputContexts']
     session_id = generic_helper.extract_session_id(output_contexts[0]['name'])
 
-    context_name = output_contexts[0]['name'] 
-    project_id = context_name.split('/')[1] 
-    session_id = context_name.split('/')[3]  
+    context_name = output_contexts[0]['name']  # Example: "projects/{project-id}/agent/sessions/{session-id}/contexts/ongoing-order"
+    project_id = context_name.split('/')[1]  # Extracting the project-id from the context name
+    session_id = context_name.split('/')[3]  # Extracting the session-id from the context name
 
     # Print the project-id and session-id to the terminal
     print(f"Project ID: {project_id}")
@@ -46,7 +52,7 @@ async def save_to_db(order: dict):
 
     # Insert individual items along with quantity in the orders table
     for food_item, quantity in order.items():
-        rcode = await db_helper.insert_order_item(food_item, quantity, next_order_id)  
+        rcode = await db_helper.insert_order_item(food_item, quantity, next_order_id)  # Make sure this inserts into the 'orders' table
         if rcode == -1:
             return -1
 
@@ -54,25 +60,6 @@ async def save_to_db(order: dict):
     await db_helper.insert_order_tracking(next_order_id, "in progress")
     return next_order_id
 
-
-
-# Complete order function
-async def complete_order(parameters: dict, session_id: str):
-    if session_id not in inprogress_orders:
-        fulfillment_text = "I'm having trouble finding your order. Can you place a new one?"
-    else:
-        order = inprogress_orders[session_id]
-        order_id = await save_to_db(order)
-        if order_id == -1:
-            fulfillment_text = "Sorry, we couldn't process your order due to a backend error. Please try again."
-        else:
-            order_total = await db_helper.get_total_order_price(order_id)
-            fulfillment_text = f"Awesome! Your order has been placed. Order ID: {order_id}. Total: {order_total}."
-
-        # Clear the in-progress order
-        del inprogress_orders[session_id]
-
-    return JSONResponse(content={"fulfillmentText": fulfillment_text})
 
 
 
@@ -130,13 +117,75 @@ async def remove_from_order(parameters: dict, session_id: str):
 
     return JSONResponse(content={"fulfillmentText": fulfillment_text})
 
-
 async def track_order(parameters: dict, session_id: str):
-    order_id = int(parameters['order_id'])
-    order_status = await db_helper.get_order_status(order_id)
-    if order_status:
-        fulfillment_text = f"Your order status for order ID {order_id} is: {order_status}"
-    else:
-        fulfillment_text = f"No order found with ID: {order_id}"
+    try:
+        # Validate and extract the order ID
+        if 'order_id' not in parameters or not parameters['order_id']:
+            return JSONResponse(content={
+                "fulfillmentText": "Please provide a valid order ID to track your order."
+            })
 
-    return JSONResponse(content={"fulfillmentText": fulfillment_text})
+        order_id = int(parameters['order_id'])
+        # Fetch the order status from the database
+        order_status = await db_helper.get_order_status(order_id)
+
+        # Check if the order status exists
+        if order_status:
+            fulfillment_text = f"Your order status for order ID {order_id} is: {order_status}"
+        else:
+            fulfillment_text = f"No order found with ID: {order_id}"
+
+        return JSONResponse(content={"fulfillmentText": fulfillment_text})
+    except ValueError:
+        return JSONResponse(content={
+            "fulfillmentText": "The order ID must be a valid number. Please try again."
+        })
+    except Exception as e:
+        # Log the exception for debugging
+        print(f"Error in track_order: {str(e)}")
+        return JSONResponse(content={
+            "fulfillmentText": "Sorry, there was an issue tracking your order. Please try again later."
+        })
+
+
+async def complete_order(parameters: dict, session_id: str):
+    try:
+        # Check if the session ID exists in the in-progress orders
+        if session_id not in inprogress_orders:
+            return JSONResponse(content={
+                "fulfillmentText": "I'm having trouble finding your order. Can you place a new one?"
+            })
+
+        # Retrieve the in-progress order
+        order = inprogress_orders[session_id]
+        # Save the order to the database
+        order_id = await save_to_db(order)
+
+        if order_id == -1:
+            # Handle database save failure
+            fulfillment_text = "Sorry, we couldn't process your order due to a backend error. Please try again."
+        else:
+            # Fetch the total price of the order
+            order_total = await db_helper.get_total_order_price(order_id)
+            fulfillment_text = f"Awesome! Your order has been placed. Order ID: {order_id}. Total: {order_total}."
+
+            # Clear the in-progress order
+            del inprogress_orders[session_id]
+
+        return JSONResponse(content={"fulfillmentText": fulfillment_text})
+    except KeyError as e:
+        # Handle missing keys in the in-progress orders
+        print(f"KeyError in complete_order: {str(e)}")
+        return JSONResponse(content={
+            "fulfillmentText": "There seems to be an issue with your order. Please try placing a new one."
+        })
+    except Exception as e:
+        # Log any unexpected exceptions for debugging
+        print(f"Error in complete_order: {str(e)}")
+        return JSONResponse(content={
+            "fulfillmentText": "Sorry, there was an issue completing your order. Please try again later."
+        })
+
+   
+
+
