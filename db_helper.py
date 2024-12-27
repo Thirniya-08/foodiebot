@@ -19,7 +19,7 @@ async def get_db_connection():
         user=DB_USER,
         password=DB_PASSWORD,
         db=DB_NAME,
-        PORT = 3306
+        port=PORT
     )
     return connection
 # Async function to get price for item
