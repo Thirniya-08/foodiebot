@@ -13,12 +13,12 @@ DB_NAME = os.getenv("DB_NAME")
 PORT = int(os.getenv("PORT"))
 
 
-def get_db_connection():
-    connection = mysql.connector.connect(
+async def get_db_connection():
+    connection = await aiomysql.connect(
         host=DB_HOST,
         user=DB_USER,
         password=DB_PASSWORD,
-        database=DB_NAME,
+        db=DB_NAME,
         port=PORT
     )
     return connection
